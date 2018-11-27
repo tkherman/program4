@@ -30,6 +30,9 @@ bool host;
 // ncurses window
 WINDOW *win;
 
+// global lock for updating and sending game state
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* Draw the current game state to the screen
  * ballX: X position of the ball
  * ballY: Y position of the ball
@@ -110,7 +113,7 @@ void tock() {
     // Move the ball
     ballX += dx;
     ballY += dy;
-    
+
     // Check for paddle collisions
     // padY is y value of closest paddle to ball
     int padY = (ballX < WIDTH / 2) ? padLY : padRY;
@@ -128,7 +131,7 @@ void tock() {
     // Check for top/bottom boundary collisions
     if(ballY == 1) dy = 1;
     else if(ballY == HEIGHT - 2) dy = -1;
-    
+
     // Score points
     if(ballX == 0) {
         scoreR = (scoreR + 1) % 100;
@@ -159,9 +162,18 @@ void *listenInput(void *args) {
 			 break;
             default: break;
 	}
-	
-    }	    
+
+    }
     return NULL;
+}
+
+/* Listen for game state updates from other user
+ * Update global positions accordingly
+*/
+void *recvUpdates(void *args) {
+    while (1) {
+        // do the things
+    }
 }
 
 void initNcurses() {
@@ -191,7 +203,7 @@ int main(int argc, char *argv[]) {
         printf("Usage: ./netpong machine port\n");
         exit(0);
     }
-    
+
     if (strcmp(argv[1], "--host") == 0) {
         host = true;
         port = stoi(string(argv[2]));
@@ -233,10 +245,14 @@ int main(int argc, char *argv[]) {
     // Set starting game state and display a countdown
     reset();
     countdown("Starting Game");
-    
+
     // Listen to keyboard input in a background thread
     pthread_t pth;
     pthread_create(&pth, NULL, listenInput, NULL);
+
+    // Listen for game state updates on a background thread
+    pthread_t thread;
+    pthread_create(&thread, NULL, recvUpdates, NULL);
 
     // Main game loop executes tock() method every REFRESH microseconds
     struct timeval tv;
@@ -252,10 +268,9 @@ int main(int argc, char *argv[]) {
         if(toSleep > refresh) toSleep = refresh;
         usleep(toSleep); // Sleep exactly as much as is necessary
     }
-    
+
     // Clean up
     pthread_join(pth, NULL);
     endwin();
     return 0;
 }
-

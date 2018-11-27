@@ -7,16 +7,19 @@ TARGETS=	netpong
 
 all: $(TARGETS)
 
-netpong: netpong.o client.o server.o
+netpong: netpong.o client.o server.o network_utils.o
 	$(CXX) $(CXFLAGS) -lncurses -o $@ $^
 
-netpong.o: netpong.cpp 
+netpong.o: netpong.cpp
 	$(CXX) $(CXFLAGS) -lncurses -o $@ -c $^
 
 client.o: client.cpp client.h
 	$(CXX) $(CXFLAGS) -o $@ -c $<
 
 server.o: server.cpp server.h
+	$(CXX) $(CXFLAGS) -o $@ -c $<
+
+network_utils.o: network_utils.cpp network_utils.h
 	$(CXX) $(CXFLAGS) -o $@ -c $<
 
 clean:
