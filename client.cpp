@@ -1,4 +1,4 @@
-#include "chatclient.h"
+#include "client.h"
 
 int socket_connect(char *host, int port) {
     int s;
