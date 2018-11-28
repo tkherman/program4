@@ -122,12 +122,45 @@ void tock(int sockfd) {
     // colX is x value of ball for a paddle collision
     int colX = (ballX < WIDTH / 2) ? PADLX + 1 : PADRX - 1;
     if(ballX == colX && abs(ballY - padY) <= 2) {
-        // Collision detected!
-        dx *= -1;
-        // Determine bounce angle
-        if(ballY < padY) dy = -1;
-        else if(ballY > padY) dy = 1;
-        else dy = 0;
+        if (host && ballX < WIDTH / 2) {
+            // Collision detected!
+            dx *= -1;
+            // Determine bounce angle
+            if(ballY < padY) dy = -1;
+            else if(ballY > padY) dy = 1;
+            else dy = 0;
+
+            // Send game state update to client
+            GameState gs;
+            gs.ballX = NULL_INT;
+            gs.ballY = NULL_INT;
+            gs.dx = dx;
+            gs.dy = dy;
+            gs.padLY = NULL_INT;
+            gs.padRY = NULL_INT;
+            gs.scoreL = NULL_INT;
+            gs.scoreR = NULL_INT;
+            send_struct(sockfd, gs);
+        } else if (!host && ballX >= WIDTH/2) {
+            // Collision detected!
+            dx *= -1;
+            // Determine bounce angle
+            if(ballY < padY) dy = -1;
+            else if(ballY > padY) dy = 1;
+            else dy = 0;
+
+            // Send game state update to host
+            GameState gs;
+            gs.ballX = NULL_INT;
+            gs.ballY = NULL_INT;
+            gs.dx = dx;
+            gs.dy = dy;
+            gs.padLY = NULL_INT;
+            gs.padRY = NULL_INT;
+            gs.scoreL = NULL_INT;
+            gs.scoreR = NULL_INT;
+            send_struct(sockfd, gs);
+        }
     }
 
     // Check for top/bottom boundary collisions
@@ -135,14 +168,38 @@ void tock(int sockfd) {
     else if(ballY == HEIGHT - 2) dy = -1;
 
     // Score points
-    if(ballX == 0) {
+    if(ballX == 0 && host) {
         scoreR = (scoreR + 1) % 100;
-	reset();
-	countdown("SCORE -->");
-    } else if(ballX == WIDTH - 1) {
+
+        GameState gs;
+        gs.ballX = NULL_INT;
+        gs.ballY = NULL_INT;
+        gs.dx = NULL_INT;
+        gs.dy = NULL_INT;
+        gs.padLY = NULL_INT;
+        gs.padRY = NULL_INT;
+        gs.scoreL = NULL_INT;
+        gs.scoreR = scoreR;
+        send_struct(sockfd, gs);
+
+        reset();
+        countdown("SCORE -->");
+    } else if(ballX == WIDTH - 1 && !host) {
         scoreL = (scoreL + 1) % 100;
-	reset();
-	countdown("<-- SCORE");
+
+        GameState gs;
+        gs.ballX = NULL_INT;
+        gs.ballY = NULL_INT;
+        gs.dx = NULL_INT;
+        gs.dy = NULL_INT;
+        gs.padLY = NULL_INT;
+        gs.padRY = NULL_INT;
+        gs.scoreL = scoreL;
+        gs.scoreR = NULL_INT;
+        send_struct(sockfd, gs);
+
+        reset();
+        countdown("<-- SCORE");
     }
     // Finally, redraw the current state
     draw(ballX, ballY, padLY, padRY, scoreL, scoreR);
@@ -197,6 +254,8 @@ void *listenInput(void *args) {
 
             send_struct(sockfd, gs);
         }
+
+        update = false;
     }
     return NULL;
 }
@@ -214,6 +273,23 @@ void *recvUpdates(void *args) {
         } else if (!host && gs.padLY != NULL_INT) {
             padLY = gs.padLY;
         }
+
+        if (gs.dx != NULL_INT)
+            dx = gs.dx;
+
+        if (gs.dy != NULL_INT)
+            dy = gs.dy;
+
+        if (gs.scoreL != NULL_INT) {
+            reset();
+            countdown("<-- SCORE");
+        }
+
+        if (gs.scoreR != NULL_INT) {
+            reset();
+            countdown("SCORE -->");
+        }
+        
     }
 }
 
