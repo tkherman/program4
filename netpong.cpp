@@ -27,6 +27,8 @@ int padLY, padRY;
 // Player scores
 int scoreL, scoreR;
 
+int new_game = 0;
+
 bool host;
 
 // ncurses window
@@ -74,13 +76,11 @@ void draw(int ballX, int ballY, int padLY, int padRY, int scoreL, int scoreR) {
  * Horizontal direction of the ball is randomized
  */
 void reset() {
-    
     ballX = WIDTH / 2;
     padLY = padRY = ballY = HEIGHT / 2;
     // dx is randomly either -1 or 1
     dx = (rand() % 2) * 2 - 1;
     dy = 0;
-    
     // Draw to reset everything visually
     draw(ballX, ballY, padLY, padRY, scoreL, scoreR);
 }
@@ -115,10 +115,8 @@ void countdown(const char *message) {
  */
 void tock(int sockfd) {
     // Move the ball
-    
     ballX += dx;
     ballY += dy;
-    
 
     // Check for paddle collisions
     // padY is y value of closest paddle to ball
@@ -127,14 +125,12 @@ void tock(int sockfd) {
     int colX = (ballX < WIDTH / 2) ? PADLX + 1 : PADRX - 1;
     if(ballX == colX && abs(ballY - padY) <= 2) {
         if (host && ballX < WIDTH / 2) {
-            
             // Collision detected!
             dx *= -1;
             // Determine bounce angle
             if(ballY < padY) dy = -1;
             else if(ballY > padY) dy = 1;
             else dy = 0;
-            
 
             // Send game state update to client
             GameState gs;
@@ -148,14 +144,12 @@ void tock(int sockfd) {
             gs.scoreR = NULL_INT;
             send_struct(sockfd, gs);
         } else if (!host && ballX >= WIDTH/2) {
-            
             // Collision detected!
             dx *= -1;
             // Determine bounce angle
             if(ballY < padY) dy = -1;
             else if(ballY > padY) dy = 1;
             else dy = 0;
-            
 
             // Send game state update to host
             GameState gs;
@@ -172,16 +166,12 @@ void tock(int sockfd) {
     }
 
     // Check for top/bottom boundary collisions
-    
     if(ballY == 1) dy = 1;
     else if(ballY == HEIGHT - 2) dy = -1;
-    
 
     // Score points
     if(ballX == 0 && host) {
-        
         scoreR = (scoreR + 1) % 100;
-        
 
         GameState gs;
         gs.ballX = NULL_INT;
@@ -194,12 +184,9 @@ void tock(int sockfd) {
         gs.scoreR = scoreR;
         send_struct(sockfd, gs);
 
-        reset();
-        countdown("SCORE -->");
+        new_game = 1;
     } else if(ballX == WIDTH - 1 && !host) {
-        
         scoreL = (scoreL + 1) % 100;
-        
 
         GameState gs;
         gs.ballX = NULL_INT;
@@ -212,8 +199,17 @@ void tock(int sockfd) {
         gs.scoreR = NULL_INT;
         send_struct(sockfd, gs);
 
+        new_game = 2;
+    }
+    
+    if (new_game == 1) {
+        reset();
+        countdown("SCORE -->");
+        new_game = 0;
+    } else if (new_game == 2) {
         reset();
         countdown("<-- SCORE");
+        new_game = 0;
     }
     // Finally, redraw the current state
     draw(ballX, ballY, padLY, padRY, scoreL, scoreR);
@@ -228,21 +224,17 @@ void *listenInput(void *args) {
     while(1) {
         switch(getch()) {
             case KEY_UP:
-                
                 if (host)
                     padLY--;
                 else
                     padRY--;
-                
                 update = true;
 			    break;
             case KEY_DOWN:
-                
                 if (host)
                     padLY++;
                 else
                     padRY++;
-                
                 update = true;
 			    break;
             default: break;
@@ -287,38 +279,25 @@ void *recvUpdates(void *args) {
         GameState gs;
         recv_struct(sockfd, gs);
         if (host && gs.padRY != NULL_INT) {
-            
             padRY = gs.padRY;
-            
         } else if (!host && gs.padLY != NULL_INT) {
-            
             padLY = gs.padLY;
-            
         }
 
         if (gs.dx != NULL_INT)
-            
             dx = gs.dx;
-            
 
         if (gs.dy != NULL_INT)
-            
             dy = gs.dy;
-            
 
         if (gs.scoreL != NULL_INT) {
             scoreL = gs.scoreL;
-            printf(gs.scoreL);
-            reset();
-            countdown("<-- SCORE");
+            new_game = 2;
         }
 
         if (gs.scoreR != NULL_INT) {
             scoreR = gs.scoreR;
-            printf(gs.scoreR);
-            
-            reset();
-            countdown("SCORE -->");
+            new_game = 1;
         }
         
     }
