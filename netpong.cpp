@@ -281,11 +281,13 @@ void *recvUpdates(void *args) {
             dy = gs.dy;
 
         if (gs.scoreL != NULL_INT) {
+            scoreL = gs.scoreL;
             reset();
             countdown("<-- SCORE");
         }
 
         if (gs.scoreR != NULL_INT) {
+            scoreR = gs.scoreR;
             reset();
             countdown("SCORE -->");
         }
