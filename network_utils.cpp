@@ -6,14 +6,14 @@ using namespace std;
 int send_struct(int sockfd, GameState gs) {
     string message;
 
-    message = string(gs.ballX) + "," + string(gs.ballY) + "," + string(gs.dx) + "," + string(gs.dy) + "," + string(gs.padLY) + "," + string(gs.padRY) + "," + string(gs.scoreL) \
-    + "," + string(gs.scoreR);
+    message = to_string(gs.ballX) + "," + to_string(gs.ballY) + "," + to_string(gs.dx) + "," \
+    + to_string(gs.dy) + "," + to_string(gs.padLY) + "," + to_string(gs.padRY) + "," + \
+    to_string(gs.scoreL) + "," + to_string(gs.scoreR);
 
     if (send_string(sockfd, message) < 0) {
         fprintf(stderr, "Failed to send struct");
         return 0;
     }
-
 }
 
 int recv_struct(int sockfd, GameState &gs) {
@@ -32,10 +32,7 @@ int recv_struct(int sockfd, GameState &gs) {
         info_list.push_back(state);
     }
 
-    pthread_mutex_lock(&mutex);
     update_gamestate(gs, info_list);
-    pthread_mutex_unlock(&mutex);
-
 }
 
 void update_gamestate(GameState &gs, vector<string> list) {

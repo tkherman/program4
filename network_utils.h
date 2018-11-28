@@ -1,4 +1,3 @@
-
 // network_utils.h
 
 #include <cstdio>
@@ -6,6 +5,7 @@
 #include <cstring>
 #include <vector>
 #include <string>
+#include <sstream>
 #include <iostream>
 #include <ostream>
 #include <fstream>
@@ -22,10 +22,9 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 
-using namespace std;
+#define NULL_INT 1000000
 
-// global lock for updating and sending game state
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+using namespace std;
 
 // Keep track of global game state
 struct GameState {

@@ -14,6 +14,7 @@ using namespace std;
 #define HEIGHT 21
 #define PADLX 1
 #define PADRX WIDTH - 2
+#define NULL_INT 1000000
 
 // Global variables recording the state of the game
 // Position of ball
@@ -109,7 +110,7 @@ void countdown(const char *message) {
  * 3. Detect scored points and react accordingly
  * 4. Draw updated game state to the screen
  */
-void tock() {
+void tock(int sockfd) {
     // Move the ball
     ballX += dx;
     ballY += dy;
@@ -150,6 +151,7 @@ void tock() {
  * Updates global pad positions
  */
 void *listenInput(void *args) {
+    int sockfd = *(int*)args;
     while(1) {
         switch(getch()) {
             case KEY_UP: padRY--;
@@ -171,6 +173,7 @@ void *listenInput(void *args) {
  * Update global positions accordingly
 */
 void *recvUpdates(void *args) {
+    int sockfd = *(int*)args;
     while (1) {
         // do the things
     }
@@ -248,18 +251,18 @@ int main(int argc, char *argv[]) {
 
     // Listen to keyboard input in a background thread
     pthread_t pth;
-    pthread_create(&pth, NULL, listenInput, NULL);
+    pthread_create(&pth, NULL, listenInput, (void*)&sockfd);
 
     // Listen for game state updates on a background thread
     pthread_t thread;
-    pthread_create(&thread, NULL, recvUpdates, NULL);
+    pthread_create(&thread, NULL, recvUpdates, (void*)&sockfd);
 
     // Main game loop executes tock() method every REFRESH microseconds
     struct timeval tv;
     while(1) {
         gettimeofday(&tv,NULL);
         unsigned long before = 1000000 * tv.tv_sec + tv.tv_usec;
-        tock(); // Update game state
+        tock(sockfd); // Update game state
         gettimeofday(&tv,NULL);
         unsigned long after = 1000000 * tv.tv_sec + tv.tv_usec;
         unsigned long toSleep = refresh - (after - before);
