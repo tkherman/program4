@@ -9,6 +9,7 @@ using namespace std;
 
 #include "client.h"
 #include "server.h"
+#include "network_utils.h"
 
 #define WIDTH 43
 #define HEIGHT 21
@@ -152,19 +153,50 @@ void tock(int sockfd) {
  */
 void *listenInput(void *args) {
     int sockfd = *(int*)args;
+    bool update = false;
     while(1) {
         switch(getch()) {
-            case KEY_UP: padRY--;
-			 break;
-            case KEY_DOWN: padRY++;
-			 break;
-            case 'w': padLY--;
-			 break;
-            case 's': padLY++;
-			 break;
+            case KEY_UP:
+                if (host)
+                    padLY--;
+                else
+                    padRY--;
+                update = true;
+			    break;
+            case KEY_DOWN:
+                if (host)
+                    padLY++;
+                else
+                    padRY++;
+                update = true;
+			    break;
             default: break;
-	}
+	    }
+        
+        if (update) {
+            GameState gs;
+            if (host) {
+                gs.ballX = NULL_INT;
+                gs.ballY = NULL_INT;
+                gs.dx = NULL_INT;
+                gs.dy = NULL_INT;
+                gs.padLY = padLY;
+                gs.padRY = NULL_INT;
+                gs.scoreL = NULL_INT;
+                gs.scoreR = NULL_INT;
+            } else {
+                gs.ballX = NULL_INT;
+                gs.ballY = NULL_INT;
+                gs.dx = NULL_INT;
+                gs.dy = NULL_INT;
+                gs.padLY = NULL_INT;
+                gs.padRY = padRY;
+                gs.scoreL = NULL_INT;
+                gs.scoreR = NULL_INT;
+            }
 
+            send_struct(sockfd, gs);
+        }
     }
     return NULL;
 }
@@ -175,7 +207,13 @@ void *listenInput(void *args) {
 void *recvUpdates(void *args) {
     int sockfd = *(int*)args;
     while (1) {
-        // do the things
+        GameState gs;
+        recv_struct(sockfd, gs);
+        if (host && gs.padRY != NULL_INT) {
+            padRY = gs.padRY;
+        } else if (!host && gs.padLY != NULL_INT) {
+            padLY = gs.padLY;
+        }
     }
 }
 
@@ -240,6 +278,22 @@ int main(int argc, char *argv[]) {
             printf("ERROR: failed to connect to host\n");
             exit(1);
         }
+    }
+    
+    // If host, send refresh rate to client
+    if (host) {
+        if (send_string(sockfd, to_string(refresh)) < 0) {
+            printf("ERROR: can't send refresh rate to client\n");
+            exit(1);
+        }
+    // If client, then recv refresh rate from host
+    } else {
+        string r;
+        if (recv_string(sockfd, r) < 0) {
+            printf("ERROR: can't get refresh rate from host\n");
+            exit(1);
+        }
+        refresh = stoi(r);
     }
 
     // Set up ncurses environment
