@@ -74,13 +74,13 @@ void draw(int ballX, int ballY, int padLY, int padRY, int scoreL, int scoreR) {
  * Horizontal direction of the ball is randomized
  */
 void reset() {
-    pthread_mutex_lock(&mutex);
+    
     ballX = WIDTH / 2;
     padLY = padRY = ballY = HEIGHT / 2;
     // dx is randomly either -1 or 1
     dx = (rand() % 2) * 2 - 1;
     dy = 0;
-    pthread_mutex_unlock(&mutex);
+    
     // Draw to reset everything visually
     draw(ballX, ballY, padLY, padRY, scoreL, scoreR);
 }
@@ -115,10 +115,10 @@ void countdown(const char *message) {
  */
 void tock(int sockfd) {
     // Move the ball
-    pthread_mutex_lock(&mutex);
+    
     ballX += dx;
     ballY += dy;
-    pthread_mutex_unlock(&mutex);
+    
 
     // Check for paddle collisions
     // padY is y value of closest paddle to ball
@@ -127,14 +127,14 @@ void tock(int sockfd) {
     int colX = (ballX < WIDTH / 2) ? PADLX + 1 : PADRX - 1;
     if(ballX == colX && abs(ballY - padY) <= 2) {
         if (host && ballX < WIDTH / 2) {
-            pthread_mutex_lock(&mutex);
+            
             // Collision detected!
             dx *= -1;
             // Determine bounce angle
             if(ballY < padY) dy = -1;
             else if(ballY > padY) dy = 1;
             else dy = 0;
-            pthread_mutex_unlock(&mutex);
+            
 
             // Send game state update to client
             GameState gs;
@@ -148,14 +148,14 @@ void tock(int sockfd) {
             gs.scoreR = NULL_INT;
             send_struct(sockfd, gs);
         } else if (!host && ballX >= WIDTH/2) {
-            pthread_mutex_lock(&mutex);
+            
             // Collision detected!
             dx *= -1;
             // Determine bounce angle
             if(ballY < padY) dy = -1;
             else if(ballY > padY) dy = 1;
             else dy = 0;
-            pthread_mutex_unlock(&mutex);
+            
 
             // Send game state update to host
             GameState gs;
@@ -172,16 +172,16 @@ void tock(int sockfd) {
     }
 
     // Check for top/bottom boundary collisions
-    pthread_mutex_lock(&mutex);
+    
     if(ballY == 1) dy = 1;
     else if(ballY == HEIGHT - 2) dy = -1;
-    pthread_mutex_unlock(&mutex);
+    
 
     // Score points
     if(ballX == 0 && host) {
-        pthread_mutex_lock(&mutex);
+        
         scoreR = (scoreR + 1) % 100;
-        pthread_mutex_unlock(&mutex);
+        
 
         GameState gs;
         gs.ballX = NULL_INT;
@@ -197,9 +197,9 @@ void tock(int sockfd) {
         reset();
         countdown("SCORE -->");
     } else if(ballX == WIDTH - 1 && !host) {
-        pthread_mutex_lock(&mutex);
+        
         scoreL = (scoreL + 1) % 100;
-        pthread_mutex_unlock(&mutex);
+        
 
         GameState gs;
         gs.ballX = NULL_INT;
@@ -228,21 +228,21 @@ void *listenInput(void *args) {
     while(1) {
         switch(getch()) {
             case KEY_UP:
-                pthread_mutex_lock(&mutex);
+                
                 if (host)
                     padLY--;
                 else
                     padRY--;
-                pthread_mutex_unlock(&mutex);
+                
                 update = true;
 			    break;
             case KEY_DOWN:
-                pthread_mutex_lock(&mutex);
+                
                 if (host)
                     padLY++;
                 else
                     padRY++;
-                pthread_mutex_unlock(&mutex);
+                
                 update = true;
 			    break;
             default: break;
@@ -287,37 +287,36 @@ void *recvUpdates(void *args) {
         GameState gs;
         recv_struct(sockfd, gs);
         if (host && gs.padRY != NULL_INT) {
-            pthread_mutex_lock(&mutex);
+            
             padRY = gs.padRY;
-            pthread_mutex_unlock(&mutex);
+            
         } else if (!host && gs.padLY != NULL_INT) {
-            pthread_mutex_lock(&mutex);
+            
             padLY = gs.padLY;
-            pthread_mutex_unlock(&mutex);
+            
         }
 
         if (gs.dx != NULL_INT)
-            pthread_mutex_lock(&mutex);
+            
             dx = gs.dx;
-            pthread_mutex_unlock(&mutex);
+            
 
         if (gs.dy != NULL_INT)
-            pthread_mutex_lock(&mutex);
+            
             dy = gs.dy;
-            pthread_mutex_unlock(&mutex);
+            
 
         if (gs.scoreL != NULL_INT) {
-            pthread_mutex_lock(&mutex);
             scoreL = gs.scoreL;
-            pthread_mutex_unlock(&mutex);
+            printf(gs.scoreL);
             reset();
             countdown("<-- SCORE");
         }
 
         if (gs.scoreR != NULL_INT) {
-            pthread_mutex_lock(&mutex);
             scoreR = gs.scoreR;
-            pthread_mutex_unlock(&mutex);
+            printf(gs.scoreR);
+            
             reset();
             countdown("SCORE -->");
         }
