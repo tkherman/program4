@@ -314,6 +314,9 @@ void *recvUpdates(void *args) {
     while (1) {
         GameState gs;
         recv_struct(n_sockfd, gs);
+
+        if (gs.end_game)
+            end_game = 1;
         
         // Update game state if applicable
         if (host && gs.padRY != NULL_INT) {
@@ -392,6 +395,9 @@ int main(int argc, char *argv[]) {
         printf("Usage: ./netpong machine port\n");
         exit(0);
     }
+
+    if (end_game)
+        exit(0);
 
     if (host) {
         if ((serv_sockfd = socket_bind_listen(port)) < 0) {

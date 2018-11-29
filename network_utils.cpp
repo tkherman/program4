@@ -28,7 +28,6 @@ int recv_struct(int sockfd, GameState &gs) {
     stringstream ss(msg);
     string state;
 
-    cerr << msg << endl;
     while(getline(ss, state, ',')) {
         info_list.push_back(state);
     }
@@ -37,18 +36,23 @@ int recv_struct(int sockfd, GameState &gs) {
 }
 
 void update_gamestate(GameState &gs, vector<string> list) {
-    try {
-        gs.ballX = stoi(list[0]);
-        gs.ballY = stoi(list[1]);
-        gs.dx = stoi(list[2]);
-        gs.dy = stoi(list[3]);
-        gs.padLY = stoi(list[4]);
-        gs.padRY = stoi(list[5]);
-        gs.scoreL = stoi(list[6]);
-        gs.scoreR = stoi(list[7]);
-        gs.end_game = stoi(list[8]);
-    }  catch  (const exception &e) {
-        cout << "A standard exception was caught, with message " << e.what() << "\n";
+    if (list.size() == 0)
+        gs.end_game = 1;
+    else {
+        try {
+            gs.ballX = stoi(list[0]);
+            gs.ballY = stoi(list[1]);
+            gs.dx = stoi(list[2]);
+            gs.dy = stoi(list[3]);
+            gs.padLY = stoi(list[4]);
+            gs.padRY = stoi(list[5]);
+            gs.scoreL = stoi(list[6]);
+            gs.scoreR = stoi(list[7]);
+            gs.end_game = stoi(list[8]);
+        }  catch  (const exception &e) {
+            cout << "A standard exception was caught, with message " << e.what() << "\n";
+        }
+
     }
 }
 
