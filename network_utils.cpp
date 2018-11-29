@@ -67,6 +67,8 @@ int send_string(int sockfd, std::string msg) {
         return ret;
     }
 
+    //cout << "message in send_string:" << msg << endl;
+
     return ret;
 }
 
@@ -93,6 +95,8 @@ int recv_string(int sockfd, std::string &msg) {
         received += ret;
         msg.append(std::string(buffer));
     }
+
+    //  cout << "message in recv_string:" << msg  << " after message"<< endl;
 
     return ret;
 }

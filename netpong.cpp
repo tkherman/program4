@@ -5,6 +5,7 @@
 #include <string.h>
 #include <string>
 #include <sys/time.h>
+#include <signal.h>
 using namespace std;
 
 #include "client.h"
@@ -30,12 +31,40 @@ int scoreL, scoreR;
 int new_game = 0;
 
 bool host;
+bool exit_game = 0;
 
 // ncurses window
 WINDOW *win;
 
 // global lock for updating and sending game state
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+//pthread_t thread;
+//pthread_t pth;
+int sockfd;
+int serv_sockfd;
+
+void handler(int signal){
+    string message = "quit";
+    exit_game = 1;
+    if(host){
+      if(send_string(sockfd, message) < 0){
+          fprintf(stderr, "Error receiving quit message from server");
+      }
+      close(serv_sockfd);
+    }
+    else{
+      if(send_string(sockfd, message) < 0){
+          fprintf(stderr, "Error receiving quit message from server");
+      }
+      close(sockfd);
+    }
+
+    //pthread_join(pth, NULL);
+    //pthread_join(thread, NULL);
+    //close(sockfd);
+    endwin();
+    exit(0);
+}
 
 /* Draw the current game state to the screen
  * ballX: X position of the ball
@@ -44,6 +73,7 @@ pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
  * padRY: Y position of the right paddle
  * scoreL: Score of the left player
  * scoreR: Score of the right player
+
  */
 void draw(int ballX, int ballY, int padLY, int padRY, int scoreL, int scoreR) {
     // Center line
@@ -201,7 +231,7 @@ void tock(int sockfd) {
 
         new_game = 2;
     }
-    
+
     if (new_game == 1) {
         reset();
         countdown("SCORE -->");
@@ -239,7 +269,7 @@ void *listenInput(void *args) {
 			    break;
             default: break;
 	    }
-        
+
         if (update) {
             GameState gs;
             if (host) {
@@ -274,10 +304,56 @@ void *listenInput(void *args) {
  * Update global positions accordingly
 */
 void *recvUpdates(void *args) {
-    int sockfd = *(int*)args;
-    while (1) {
+    int sockfd_local = *(int*)args;
+    string message;
+    while (!exit_game) {
+      /*
+        if(exit_game){
+          if(recv_string(sockfd_local, message) < 0){
+              fprintf(stderr, "Error receiving quit message from server");
+          }
+          if(message.compare("quit") == 0){
+              if(host){
+                close(sockfd);
+                endwin();
+                exit(0);
+              }
+              else{
+                close(serv_sockfd);
+                endwin();
+                exit(0);
+              }
+          }
+        }*/
+
+
+        if(host && exit_game){
+          if(recv_string(sockfd, message) < 0){
+              fprintf(stderr, "Error receiving quit message from server");
+          }
+          if(message.compare("quit") == 0){
+            cout<< "message is quit inside host" << endl;
+
+          }
+          cout<< "message is quit inside host1" << endl;
+          break;
+        }
+        else if(!host && exit_game){
+          if(recv_string(serv_sockfd, message) < 0){
+              fprintf(stderr, "Error receiving quit message from server");
+          }
+          if(message.compare("quit") == 0){
+            cout<< "message is quit inside client" << endl;
+          }
+          cout<< "message is quit inside client2" << endl;
+          break;
+        }
+
+
         GameState gs;
-        recv_struct(sockfd, gs);
+        cout << "exit_game: " << exit_game << "\nAfter recv struct in while loop" << endl;
+        recv_struct(sockfd_local, gs);
+
         if (host && gs.padRY != NULL_INT) {
             padRY = gs.padRY;
         } else if (!host && gs.padLY != NULL_INT) {
@@ -294,13 +370,28 @@ void *recvUpdates(void *args) {
             scoreL = gs.scoreL;
             new_game = 2;
         }
-
         if (gs.scoreR != NULL_INT) {
             scoreR = gs.scoreR;
             new_game = 1;
         }
-        
+
     }
+
+    /*if(recv_string(sockfd_local, message) < 0){
+        fprintf(stderr, "Error receiving quit message from server");
+    }
+    if(message.compare("quit") == 0){*/
+        if(host){
+          close(serv_sockfd);
+          endwin();
+          exit(0);
+        }
+        else{
+          close(sockfd);
+          endwin();
+          exit(0);
+        }
+    //}
 }
 
 void initNcurses() {
@@ -348,8 +439,8 @@ int main(int argc, char *argv[]) {
         host = false;
     }
 
-    int serv_sockfd;
-    int sockfd;
+    //int serv_sockfd;
+    //int sockfd;
     if (host) {
         if ((serv_sockfd = socket_bind_listen(port)) < 0) {
             printf("ERROR: socket bind listen failed\n");
@@ -365,7 +456,7 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-    
+
     // If host, send refresh rate to client
     if (host) {
         if (send_string(sockfd, to_string(refresh)) < 0) {
@@ -410,10 +501,16 @@ int main(int argc, char *argv[]) {
         // In that case it's MUCH bigger because of overflow!
         if(toSleep > refresh) toSleep = refresh;
         usleep(toSleep); // Sleep exactly as much as is necessary
+        signal(SIGINT, handler);
     }
 
     // Clean up
+    //cout << "before signal" << endl;
+
     pthread_join(pth, NULL);
+    pthread_join(thread, NULL);
+
+    //pthread_join(pth, NULL);
     endwin();
     return 0;
 }
