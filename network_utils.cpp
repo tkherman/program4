@@ -8,7 +8,7 @@ int send_struct(int sockfd, GameState gs) {
 
     message = to_string(gs.ballX) + "," + to_string(gs.ballY) + "," + to_string(gs.dx) + "," \
     + to_string(gs.dy) + "," + to_string(gs.padLY) + "," + to_string(gs.padRY) + "," + \
-    to_string(gs.scoreL) + "," + to_string(gs.scoreR);
+    to_string(gs.scoreL) + "," + to_string(gs.scoreR) + "," + to_string(gs.end_game);
 
     if (send_string(sockfd, message) < 0) {
         fprintf(stderr, "Failed to send struct");
@@ -28,6 +28,7 @@ int recv_struct(int sockfd, GameState &gs) {
     stringstream ss(msg);
     string state;
 
+    cerr << msg << endl;
     while(getline(ss, state, ',')) {
         info_list.push_back(state);
     }
@@ -45,6 +46,7 @@ void update_gamestate(GameState &gs, vector<string> list) {
         gs.padRY = stoi(list[5]);
         gs.scoreL = stoi(list[6]);
         gs.scoreR = stoi(list[7]);
+        gs.end_game = stoi(list[8]);
     }  catch  (const exception &e) {
         cout << "A standard exception was caught, with message " << e.what() << "\n";
     }
@@ -66,8 +68,6 @@ int send_string(int sockfd, std::string msg) {
         perror ("ERROR sending string message");
         return ret;
     }
-
-    //cout << "message in send_string:" << msg << endl;
 
     return ret;
 }
@@ -95,8 +95,6 @@ int recv_string(int sockfd, std::string &msg) {
         received += ret;
         msg.append(std::string(buffer));
     }
-
-    //  cout << "message in recv_string:" << msg  << " after message"<< endl;
 
     return ret;
 }

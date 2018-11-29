@@ -32,6 +32,7 @@ struct GameState {
     int dx, dy;
     int padLY, padRY;
     int scoreL, scoreR;
+    int end_game;
 };
 
 int send_struct(int sockfd, GameState gs);

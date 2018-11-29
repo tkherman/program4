@@ -3,9 +3,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <string.h>
+#include <signal.h>
 #include <string>
 #include <sys/time.h>
-#include <signal.h>
 using namespace std;
 
 #include "client.h"
@@ -29,41 +29,34 @@ int padLY, padRY;
 int scoreL, scoreR;
 
 int new_game = 0;
+int end_game = 0;
+
+int serv_sockfd;
+int sockfd;
 
 bool host;
-bool exit_game = 0;
 
 // ncurses window
 WINDOW *win;
 
 // global lock for updating and sending game state
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-//pthread_t thread;
-//pthread_t pth;
-int sockfd;
-int serv_sockfd;
 
-void handler(int signal){
-    string message = "quit";
-    exit_game = 1;
-    if(host){
-      if(send_string(sockfd, message) < 0){
-          fprintf(stderr, "Error receiving quit message from server");
-      }
-      close(serv_sockfd);
-    }
-    else{
-      if(send_string(sockfd, message) < 0){
-          fprintf(stderr, "Error receiving quit message from server");
-      }
-      close(sockfd);
-    }
+void handler(int signal) {
+    // Send end_game to other side
+    GameState gs;
+    gs.ballX = NULL_INT;
+    gs.ballY = NULL_INT;
+    gs.dx = NULL_INT;
+    gs.dy = NULL_INT;
+    gs.padLY = NULL_INT;
+    gs.padRY = NULL_INT;
+    gs.scoreL = NULL_INT;
+    gs.scoreR = NULL_INT;
+    gs.end_game = 1;
+    send_struct(sockfd, gs);
 
-    //pthread_join(pth, NULL);
-    //pthread_join(thread, NULL);
-    //close(sockfd);
-    endwin();
-    exit(0);
+    end_game = 1; 
 }
 
 /* Draw the current game state to the screen
@@ -73,7 +66,6 @@ void handler(int signal){
  * padRY: Y position of the right paddle
  * scoreL: Score of the left player
  * scoreR: Score of the right player
-
  */
 void draw(int ballX, int ballY, int padLY, int padRY, int scoreL, int scoreR) {
     // Center line
@@ -142,6 +134,12 @@ void countdown(const char *message) {
  * 2. Detect collisions
  * 3. Detect scored points and react accordingly
  * 4. Draw updated game state to the screen
+ *
+ * netpong specific:
+ *  only send update to opposition if changes happen on own side
+ *  so if host on left and client on right and ball on right
+ *  client is the decider and changes in x direction or score
+ *  is intiated by client
  */
 void tock(int sockfd) {
     // Move the ball
@@ -172,6 +170,7 @@ void tock(int sockfd) {
             gs.padRY = NULL_INT;
             gs.scoreL = NULL_INT;
             gs.scoreR = NULL_INT;
+            gs.end_game = 0;
             send_struct(sockfd, gs);
         } else if (!host && ballX >= WIDTH/2) {
             // Collision detected!
@@ -191,6 +190,7 @@ void tock(int sockfd) {
             gs.padRY = NULL_INT;
             gs.scoreL = NULL_INT;
             gs.scoreR = NULL_INT;
+            gs.end_game = 0;
             send_struct(sockfd, gs);
         }
     }
@@ -212,6 +212,7 @@ void tock(int sockfd) {
         gs.padRY = NULL_INT;
         gs.scoreL = NULL_INT;
         gs.scoreR = scoreR;
+        gs.end_game = 0;
         send_struct(sockfd, gs);
 
         new_game = 1;
@@ -227,11 +228,12 @@ void tock(int sockfd) {
         gs.padRY = NULL_INT;
         gs.scoreL = scoreL;
         gs.scoreR = NULL_INT;
+        gs.end_game = 0;
         send_struct(sockfd, gs);
 
         new_game = 2;
     }
-
+    
     if (new_game == 1) {
         reset();
         countdown("SCORE -->");
@@ -249,9 +251,10 @@ void tock(int sockfd) {
  * Updates global pad positions
  */
 void *listenInput(void *args) {
-    int sockfd = *(int*)args;
+    int n_sockfd = *(int*)args;
     bool update = false;
     while(1) {
+
         switch(getch()) {
             case KEY_UP:
                 if (host)
@@ -269,7 +272,8 @@ void *listenInput(void *args) {
 			    break;
             default: break;
 	    }
-
+        
+        // Send updated game state if user input detected
         if (update) {
             GameState gs;
             if (host) {
@@ -281,6 +285,7 @@ void *listenInput(void *args) {
                 gs.padRY = NULL_INT;
                 gs.scoreL = NULL_INT;
                 gs.scoreR = NULL_INT;
+                gs.end_game = 0;
             } else {
                 gs.ballX = NULL_INT;
                 gs.ballY = NULL_INT;
@@ -290,9 +295,10 @@ void *listenInput(void *args) {
                 gs.padRY = padRY;
                 gs.scoreL = NULL_INT;
                 gs.scoreR = NULL_INT;
+                gs.end_game = 0;
             }
 
-            send_struct(sockfd, gs);
+            send_struct(n_sockfd, gs);
         }
 
         update = false;
@@ -304,56 +310,12 @@ void *listenInput(void *args) {
  * Update global positions accordingly
 */
 void *recvUpdates(void *args) {
-    int sockfd_local = *(int*)args;
-    string message;
-    while (!exit_game) {
-      /*
-        if(exit_game){
-          if(recv_string(sockfd_local, message) < 0){
-              fprintf(stderr, "Error receiving quit message from server");
-          }
-          if(message.compare("quit") == 0){
-              if(host){
-                close(sockfd);
-                endwin();
-                exit(0);
-              }
-              else{
-                close(serv_sockfd);
-                endwin();
-                exit(0);
-              }
-          }
-        }*/
-
-
-        if(host && exit_game){
-          if(recv_string(sockfd, message) < 0){
-              fprintf(stderr, "Error receiving quit message from server");
-          }
-          if(message.compare("quit") == 0){
-            cout<< "message is quit inside host" << endl;
-
-          }
-          cout<< "message is quit inside host1" << endl;
-          break;
-        }
-        else if(!host && exit_game){
-          if(recv_string(serv_sockfd, message) < 0){
-              fprintf(stderr, "Error receiving quit message from server");
-          }
-          if(message.compare("quit") == 0){
-            cout<< "message is quit inside client" << endl;
-          }
-          cout<< "message is quit inside client2" << endl;
-          break;
-        }
-
-
+    int n_sockfd = *(int*)args;
+    while (1) {
         GameState gs;
-        cout << "exit_game: " << exit_game << "\nAfter recv struct in while loop" << endl;
-        recv_struct(sockfd_local, gs);
-
+        recv_struct(n_sockfd, gs);
+        
+        // Update game state if applicable
         if (host && gs.padRY != NULL_INT) {
             padRY = gs.padRY;
         } else if (!host && gs.padLY != NULL_INT) {
@@ -370,28 +332,14 @@ void *recvUpdates(void *args) {
             scoreL = gs.scoreL;
             new_game = 2;
         }
+
         if (gs.scoreR != NULL_INT) {
             scoreR = gs.scoreR;
             new_game = 1;
         }
 
+        
     }
-
-    /*if(recv_string(sockfd_local, message) < 0){
-        fprintf(stderr, "Error receiving quit message from server");
-    }
-    if(message.compare("quit") == 0){*/
-        if(host){
-          close(serv_sockfd);
-          endwin();
-          exit(0);
-        }
-        else{
-          close(sockfd);
-          endwin();
-          exit(0);
-        }
-    //}
 }
 
 void initNcurses() {
@@ -408,6 +356,7 @@ void initNcurses() {
 }
 
 int main(int argc, char *argv[]) {
+    signal(SIGINT, handler);
     // Process args
     // refresh is clock rate in microseconds
     // This corresponds to the movement speed of the ball
@@ -422,7 +371,7 @@ int main(int argc, char *argv[]) {
         exit(0);
     }
 
-    if (strcmp(argv[1], "--host") == 0) {
+    if (strcmp(argv[1], "--host") == 0 && argc == 4) {
         host = true;
         port = stoi(string(argv[2]));
         difficulty = string(argv[3]);
@@ -433,14 +382,17 @@ int main(int argc, char *argv[]) {
             printf("ERROR: Difficulty should be one of easy, medium, hard.\n");
             exit(1);
         }
-    } else {
+    } else if (strcmp(argv[1], "--host") && argc == 3){
         machine = string(argv[1]);
         port = stoi(string(argv[2]));
         host = false;
+    } else {
+        printf("Usage: ./netpong --host port difficulty\n");
+        printf("or\n");
+        printf("Usage: ./netpong machine port\n");
+        exit(0);
     }
 
-    //int serv_sockfd;
-    //int sockfd;
     if (host) {
         if ((serv_sockfd = socket_bind_listen(port)) < 0) {
             printf("ERROR: socket bind listen failed\n");
@@ -456,7 +408,7 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
     }
-
+    
     // If host, send refresh rate to client
     if (host) {
         if (send_string(sockfd, to_string(refresh)) < 0) {
@@ -491,6 +443,10 @@ int main(int argc, char *argv[]) {
     // Main game loop executes tock() method every REFRESH microseconds
     struct timeval tv;
     while(1) {
+        if (end_game) {
+            break;
+        }
+
         gettimeofday(&tv,NULL);
         unsigned long before = 1000000 * tv.tv_sec + tv.tv_usec;
         tock(sockfd); // Update game state
@@ -501,16 +457,15 @@ int main(int argc, char *argv[]) {
         // In that case it's MUCH bigger because of overflow!
         if(toSleep > refresh) toSleep = refresh;
         usleep(toSleep); // Sleep exactly as much as is necessary
-        signal(SIGINT, handler);
     }
 
     // Clean up
-    //cout << "before signal" << endl;
-
-    pthread_join(pth, NULL);
-    pthread_join(thread, NULL);
-
-    //pthread_join(pth, NULL);
+    pthread_cancel(pth);
+    pthread_cancel(thread);
     endwin();
+    if (host)
+        close(serv_sockfd);
+    close(sockfd);
+
     return 0;
 }
